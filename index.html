@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Free Multi-Agent AI Workspace</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1f2937; }
+        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+        .pulse-border { animation: pulse 2s infinite; }
+        @keyframes pulse {
+            0%, 100% { border-color: #3b82f6; }
+            50% { border-color: #93c5fd; }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen font-sans p-4 md:p-8">
+
+    <div class="max-w-6xl mx-auto space-y-6">
+        <!-- Header -->
+        <header class="border-b border-gray-700 pb-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+                <h1 class="text-2xl font-bold text-blue-400">⚡ OpenAgent Swarm</h1>
+                <p class="text-sm text-gray-400">Unlimited Multi-Agent Task Solver for Everyone</p>
+            </div>
+            <div class="flex flex-wrap gap-2 items-center w-full md:w-auto">
+                <select id="provider" class="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-gray-200" onchange="updateProvider()">
+                    <option value="groq">Groq (Free & Fast - Recommended)</option>
+                    <option value="gemini">Google Gemini (Free Tier)</option>
+                    <option value="openrouter">OpenRouter (Free Models)</option>
+                </select>
+                <input id="apiKey" type="password" placeholder="Paste Free API Key here..." class="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm flex-1 md:w-64 text-gray-200">
+            </div>
+        </header>
+
+        <!-- Main Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <!-- Left Column: Controls & Agents -->
+            <div class="space-y-6">
+                <!-- Task Input -->
+                <div class="bg-gray-800 p-4 rounded-lg border border-gray-700">
+                    <label class="block text-sm font-semibold mb-2 text-blue-300">1. Enter Your Complex Problem</label>
+                    <textarea id="mainGoal" rows="4" class="w-full bg-gray-900 border border-gray-700 rounded p-3 text-sm text-gray-200 focus:outline-none focus:border-blue-500" placeholder="E.g., Create a complete business plan, marketing strategy, and full HTML landing page code for a low-cost tutoring service..."></textarea>
+                    <div class="mt-3 flex gap-2">
+                        <button id="startBtn" onclick="startSwarm()" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2 px-4 rounded transition">
+                            🚀 Deploy Agents
+                        </button>
+                        <button id="stopBtn" onclick="stopSwarm()" class="bg-red-600 hover:bg-red-500 text-white font-semibold py-2 px-4 rounded transition hidden">
+                            🛑 Stop
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Custom Agents Roster -->
+                <div class="bg-gray-800 p-4 rounded-lg border border-gray-700">
+                    <div class="flex justify-between items-center mb-3">
+                        <label class="text-sm font-semibold text-blue-300">2. Active AI Agents</label>
+                        <button onclick="addAgentPrompt()" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded">+ Add Agent</button>
+                    </div>
+                    <div id="agentList" class="space-y-2 max-h-64 overflow-y-auto pr-1">
+                        <!-- Agents populated by JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Live Workspace & Final Output -->
+            <div class="lg:col-span-2 space-y-6">
+                <!-- Task Queue Status -->
+                <div class="bg-gray-800 p-4 rounded-lg border border-gray-700">
+                    <h2 class="text-sm font-semibold text-blue-300 mb-3">📋 Self-Allocated Task Queue</h2>
+                    <div id="taskQueue" class="space-y-2 text-sm text-gray-400">
+                        <p class="italic text-gray-500">Waiting for a problem to solve...</p>
+                    </div>
+                </div>
+
+                <!-- Live Agent Output Log -->
+                <div class="bg-gray-800 p-4 rounded-lg border border-gray-700 flex flex-col h-[500px]">
+                    <div class="flex justify-between items-center mb-3">
+                        <h2 class="text-sm font-semibold text-green-400">💻 Live Agent Workspace (No-Limit Stream)</h2>
+                        <button onclick="downloadOutput()" class="text-xs bg-green-700 hover:bg-green-600 text-white px-3 py-1 rounded">💾 Download Full Output</button>
+                    </div>
+                    <div id="workspaceLog" class="flex-1 bg-gray-950 p-4 rounded border border-gray-800 overflow-y-auto font-mono text-xs space-y-4 whitespace-pre-wrap">Welcome! To use this for free without limits:
+1. Get a free API key from console.groq.com or aistudio.google.com
+2. Paste it in the top right box.
+3. Type any massive task on the left and click Deploy Agents!</div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        // Default Agents
+        let agents = [
+            { name: "Researcher", role: "Gathers facts, outlines requirements, and structures deep analysis." },
+            { name: "Coder", role: "Writes clean, complete, production-ready code without placeholders." },
+            { name: "Writer", role: "Drafts comprehensive guides, content, and detailed documentation." },
+            { name: "Critic", role: "Reviews work, fixes missing parts, and ensures high quality." }
+        ];
+
+        let isRunning = false;
+        let compiledOutput = "";
+
+        function renderAgents() {
+            const container = document.getElementById('agentList');
+            container.innerHTML = '';
+            agents.forEach((ag, index) => {
+                container.innerHTML += `
+                    <div class="bg-gray-900 p-2.5 rounded border border-gray-700 flex justify-between items-start">
+                        <div>
+                            <div class="font-bold text-xs text-blue-400">🤖 ${ag.name}</div>
+                            <div class="text-xs text-gray-400 mt-0.5">${ag.role}</div>
+                        </div>
+                        <button onclick="removeAgent(${index})" class="text-gray-500 hover:text-red-400 text-xs">✕</button>
+                    </div>
+                `;
+            });
+        }
+
+        function addAgentPrompt() {
+            const name = prompt("Enter Agent Name (e.g., Math Solver, Translator):");
+            if (!name) return;
+            const role = prompt("Enter what this agent does:");
+            if (!role) return;
+            agents.push({ name, role });
+            renderAgents();
+        }
+
+        function removeAgent(index) {
+            if (agents.length <= 1) return alert("You need at least one worker agent!");
+            agents.splice(index, 1);
+            renderAgents();
+        }
+
+        function logToWorkspace(title, text, color = "text-gray-200") {
+            const log = document.getElementById('workspaceLog');
+            const entry = document.createElement('div');
+            entry.className = `border-b border-gray-800 pb-3 ${color}`;
+            entry.innerHTML = `<div class="font-bold text-sm mb-1 text-blue-400">${title}</div><div>${text.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>`;
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+            compiledOutput += `\n\n=== ${title} ===\n${text}\n`;
+        }
+
+        function stopSwarm() {
+            isRunning = false;
+            document.getElementById('startBtn').classList.remove('hidden');
+            document.getElementById('stopBtn').classList.add('hidden');
+            logToWorkspace("SYSTEM", "🛑 Execution stopped by user.", "text-red-400");
+        }
+
+        // Universal API Caller with Auto-Retry for Rate Limits
+        async function callAI(systemPrompt, userPrompt) {
+            const provider = document.getElementById('provider').value;
+            const apiKey = document.getElementById('apiKey').value.trim();
+
+            if (!apiKey) throw new Error("Please enter a Free API Key at the top right.");
+
+            let url = "";
+            let headers = { "Content-Type": "application/json" };
+            let body = {};
+
+            if (provider === "groq") {
+                url = "https://api.groq.com/openai/v1/chat/completions";
+                headers["Authorization"] = `Bearer ${apiKey}`;
+                body = {
+                    model: "llama-3.3-70b-versatile",
+                    messages: [
+                        { role: "system", content: systemPrompt },
+                        { role: "user", content: userPrompt }
+                    ],
+                    temperature: 0.5
+                };
+            } else if (provider === "openrouter") {
+                url = "https://openrouter.ai/api/v1/chat/completions";
+                headers["Authorization"] = `Bearer ${apiKey}`;
+                body = {
+                    model: "meta-llama/llama-3.1-8b-instruct:free",
+                    messages: [
+                        { role: "system", content: systemPrompt },
+                        { role: "user", content: userPrompt }
+                    ]
+                };
+            } else if (provider === "gemini") {
+                url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+                body = {
+                    system_instruction: { parts: [{ text: systemPrompt }] },
+                    contents: [{ parts: [{ text: userPrompt }] }]
+                };
+            }
+
+            // Retry loop to bypass free-tier rate limits
+            for (let attempt = 1; attempt <= 4; attempt++) {
+                try {
+                    const response = await fetch(url, { method: "POST", headers, body: JSON.stringify(body) });
+                    if (response.status === 429) {
+                        logToWorkspace("SYSTEM NOTICE", `⏳ Free tier rate limit hit. Cooling down for 12 seconds before resuming automatically (Attempt ${attempt}/4)...`, "text-yellow-400");
+                        await new Promise(r => setTimeout(r, 12000));
+                        continue;
+                    }
+                    const data = await response.json();
+                    if (!response.ok) throw new Error(data.error?.message || "API Error");
+
+                    if (provider === "gemini") {
+                        return data.candidates[0].content.parts[0].text;
+                    } else {
+                        return data.choices[0].message.content;
+                    }
+                } catch (err) {
+                    if (attempt === 4) throw err;
+                    await new Promise(r => setTimeout(r, 4000));
+                }
+            }
+        }
+
+        async function startSwarm() {
+            const goal = document.getElementById('mainGoal').value.trim();
+            if (!goal) return alert("Please enter a problem to solve!");
+
+            isRunning = true;
+            compiledOutput = "";
+            document.getElementById('workspaceLog').innerHTML = "";
+            document.getElementById('startBtn').classList.add('hidden');
+            document.getElementById('stopBtn').classList.remove('hidden');
+
+            try {
+                logToWorkspace("🧠 MANAGER AGENT", "Analyzing problem and allocating tasks to specialized agents...");
+
+                const agentDescriptions = agents.map(a => `${a.name} (${a.role})`).join(", ");
+                const plannerSystem = `You are an autonomous Manager Agent. Break down the user's big goal into 3 to 6 sequential, manageable sub-tasks so no single agent hits an output limit. Assign each sub-task to one of these available agents: ${agentDescriptions}.
+                Respond ONLY with a valid JSON array of objects in this exact format:
+                [{"step": 1, "agent": "AgentName", "task": "Specific instructions for this part"}]`;
+
+                let planRaw = await callAI(plannerSystem, `Goal: ${goal}`);
+                
+                // Extract JSON cleanly
+                const jsonMatch = planRaw.match(/\[[\s\S]*\]/);
+                if (!jsonMatch) throw new Error("Manager failed to format task list. Try again.");
+                const tasks = JSON.parse(jsonMatch[0]);
+
+                // Render Task Queue
+                const queueDiv = document.getElementById('taskQueue');
+                queueDiv.innerHTML = "";
+                tasks.forEach((t, i) => {
+                    queueDiv.innerHTML += `
+                        <div id="task-${i}" class="p-2.5 rounded bg-gray-900 border border-gray-700 flex justify-between items-center">
+                            <div><span class="font-bold text-blue-400">[${t.agent}]</span> ${t.task}</div>
+                            <span id="status-${i}" class="text-xs px-2 py-0.5 rounded bg-gray-700 text-gray-300">Pending</span>
+                        </div>
+                    `;
+                });
+
+                let sharedMemory = `Overall Goal: ${goal}\n\n`;
+
+                // Execute each task sequentially without hitting token limits
+                for (let i = 0; i < tasks.length; i++) {
+                    if (!isRunning) break;
+                    const currentTask = tasks[i];
+                    const agentObj = agents.find(a => a.name.toLowerCase() === currentTask.agent.toLowerCase()) || agents[0];
+
+                    // Update UI status
+                    document.getElementById(`task-${i}`).classList.add('pulse-border');
+                    const statusBadge = document.getElementById(`status-${i}`);
+                    statusBadge.innerText = "Working...";
+                    statusBadge.className = "text-xs px-2 py-0.5 rounded bg-blue-600 text-white";
+
+                    const workerSystem = `You are ${agentObj.name}. Your role: ${agentObj.role}. 
+                    Complete ONLY your assigned sub-task thoroughly and completely. Do not leave placeholders or summaries—write the full actual output needed for your step.`;
+
+                    const workerPrompt = `Context from previous agents:\n${sharedMemory.slice(-6000)}\n\nYOUR ASSIGNED TASK NOW:\n${currentTask.task}`;
+
+                    const result = await callAI(workerSystem, workerPrompt);
+
+                    // Save output and update UI
+                    logToWorkspace(`🤖 ${agentObj.name.toUpperCase()} (Step ${i + 1})`, result);
+                    sharedMemory += `\n--- Output from ${agentObj.name} (Step ${i + 1}) ---\n${result}\n`;
+
+                    document.getElementById(`task-${i}`).classList.remove('pulse-border');
+                    statusBadge.innerText = "Done ✓";
+                    statusBadge.className = "text-xs px-2 py-0.5 rounded bg-green-700 text-white";
+                }
+
+                if (isRunning) {
+                    logToWorkspace("🎉 SYSTEM COMPLETE", "All agents have finished their allocated tasks without hitting limits! Click 'Download Full Output' above to save everything.", "text-green-400");
+                }
+
+            } catch (err) {
+                logToWorkspace("⚠️ ERROR", err.message, "text-red-400");
+            } finally {
+                isRunning = false;
+                document.getElementById('startBtn').classList.remove('hidden');
+                document.getElementById('stopBtn').classList.add('hidden');
+            }
+        }
+
+        function downloadOutput() {
+            if (!compiledOutput) return alert("No output generated yet!");
+            const blob = new Blob([compiledOutput], { type: "text/plain" });
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = "MultiAgent_Solution.txt";
+            a.click();
+        }
+
+        // Initialize default agents on load
+        renderAgents();
+    </script>
+</body>
+</html>
